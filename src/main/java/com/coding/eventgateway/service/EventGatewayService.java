@@ -14,12 +14,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.coding.eventgateway.dto.BalanceResponse;
@@ -32,6 +28,12 @@ import com.coding.eventgateway.exception.AccountServiceUnavailableException;
 import com.coding.eventgateway.repository.EventRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class EventGatewayService {
@@ -47,12 +49,37 @@ public class EventGatewayService {
 	@Autowired
 	private ObjectMapper objectMapper;
 
+	@Autowired
+	private MeterRegistry meterRegistry;
+
 	@Value("${account.service.base-url}")
 	private String accountServiceBaseUrl;
 
-	@Retryable(retryFor = {
-			AccountServiceUnavailableException.class }, maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2))
+	private Counter requestCounter;
+	private Counter successCounter;
+	private Counter failureCounter;
+	private Counter duplicateCounter;
+
+	@PostConstruct
+	public void init() {
+
+		requestCounter = Counter.builder("gateway.events.requests").description("Total event requests")
+				.register(meterRegistry);
+
+		successCounter = Counter.builder("gateway.events.success").description("Successfully processed events")
+				.register(meterRegistry);
+
+		failureCounter = Counter.builder("gateway.events.failed").description("Failed event processing")
+				.register(meterRegistry);
+		duplicateCounter = Counter.builder("gateway.events.duplicate").description("Duplicate event processing")
+				.register(meterRegistry);
+	}
+
+	@Retry(name = "accountService")
+	@CircuitBreaker(name = "accountService")
 	public EventResponse process(EventRequest request, String traceId) {
+		log.info("Processing event started eventid= {} ", request.getEventId());
+		requestCounter.increment();
 
 		Event existing = repository.findById(request.getEventId()).orElse(null);
 
@@ -62,6 +89,8 @@ public class EventGatewayService {
 		if (existing != null) {
 
 			if (existing.getStatus() == EventStatus.PROCESSED) {
+				duplicateCounter.increment();
+				log.info("Duplicate event found eventid= {} ", request.getEventId());
 
 				EventResponse response = new EventResponse();
 
@@ -94,12 +123,18 @@ public class EventGatewayService {
 		ResponseEntity<EventResponse> response;
 
 		try {
+			log.info("Account service call started eventid= {} ", request.getEventId());
 			response = restTemplate.exchange(
 					accountServiceBaseUrl + "/accounts/" + request.getAccountId() + "/transactions", HttpMethod.POST,
 					entity, EventResponse.class);
-			repository.save(event);
+			log.info("Account service call ended eventid= {} ", request.getEventId());
 			event.setStatus(EventStatus.PROCESSED);
+			repository.save(event);
+			successCounter.increment();
+
 		} catch (Exception e) {
+			failureCounter.increment();
+			log.error("Account service is unavailable eventid= {} ", request.getEventId());
 			event.setStatus(EventStatus.FAILED);
 			repository.save(event);
 			throw new AccountServiceUnavailableException("Account Service is unavailable");
@@ -107,29 +142,32 @@ public class EventGatewayService {
 
 		return response.getBody();
 	}
-
-	@Recover
-	public EventResponse recover(AccountServiceUnavailableException ex, EventRequest request, String traceId) {
-
-		Event event = repository.findById(request.getEventId())
-				.orElseThrow(() -> new AccountServiceUnavailableException(
-						"Account Service is unavailable. Please try again later."));
-
-		event.setStatus(EventStatus.FAILED);
-
-		repository.save(event);
-
-		throw new AccountServiceUnavailableException("Account Service is unavailable. Please try again later.");
-	}
+//
+//	@Recover
+//	public EventResponse recover(AccountServiceUnavailableException ex, EventRequest request, String traceId) {
+//
+//		Event event = repository.findById(request.getEventId())
+//				.orElseThrow(() -> new AccountServiceUnavailableException(
+//						"Account Service is unavailable. Please try again later."));
+//
+//		event.setStatus(EventStatus.FAILED);
+//
+//		repository.save(event);
+//		log.error("Account service is unavailable eventid= {} ", request.getEventId());
+//
+//		throw new AccountServiceUnavailableException("Account Service is unavailable. Please try again later.");
+//	}
 
 	public EventDto getEvent(String eventId) {
 
+		log.info("fetching requested event details from gateway eventid= {} ", eventId);
 		Event event = repository.findById(eventId).orElseGet(() -> new Event());
 		return convert(event);
 
 	}
 
 	public List<EventDto> getEvents(String accountId) {
+		log.info("fetching event details from gateway for the given account accountid= {} ", accountId);
 
 		return repository.findByAccountIdOrderByEventTimestampDesc(accountId).stream().map(this::convert)
 				.collect(Collectors.toList());
@@ -137,9 +175,14 @@ public class EventGatewayService {
 
 	public BalanceResponse getBalance(String accountId) {
 		try {
+
+			log.info("fetching balance from account service for account accountid= {} ", accountId);
 			return restTemplate.getForObject(accountServiceBaseUrl + "/accounts/" + accountId + "/balance",
 					BalanceResponse.class);
+
 		} catch (Exception ex) {
+			log.error("error retrieved while fetching balance from account service for account accountid= {} ",
+					accountId);
 			throw new AccountServiceUnavailableException("Account Service is unavailable");
 		}
 	}

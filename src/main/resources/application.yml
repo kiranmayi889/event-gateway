@@ -29,34 +29,44 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,metrics,prometheus
   endpoint:
     health:
       show-details: always
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  metrics:
+    tags:
+      application: ${spring.application.name}
+otel:
+  service:
+    name: gateway-service
+
+  exporter:
+    otlp:
+      endpoint: http://localhost:4317
 
 resilience4j:
   circuitbreaker:
+    circuitBreakerAspectOrder: 1
     instances:
       accountService:
         slidingWindowType: COUNT_BASED
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
         failureRateThreshold: 50
-        waitDurationInOpenState: 10s
+        waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
   retry:
+    retryAspectOrder: 2
     instances:
       accountService:
-        maxAttempts: 2
+        maxAttempts: 3
         waitDuration: 300ms
-  timelimiter:
-    instances:
-      accountService:
-        timeoutDuration: 2s
-
-logging:
-  pattern:
-    console: "%d %-5level [%X{traceId}] %logger - %msg%n"
-  level:
-    root: INFO
-    com.example.eventgateway: INFO
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - com.coding.eventgateway.exception.AccountServiceUnavailableException

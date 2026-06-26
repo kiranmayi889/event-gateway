@@ -1,9 +1,8 @@
 package com.coding.eventgateway.exception;
 
-
-
 import java.time.Instant;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,131 +16,123 @@ import com.coding.eventgateway.dto.ErrorResponse;
 import com.coding.eventgateway.dto.EventType;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> validation(
-            MethodArgumentNotValidException ex) {
+	@Autowired
+	private Tracer tracer;
 
-        ErrorResponse response = new ErrorResponse();
+	@ExceptionHandler(MethodArgumentNotValidException.class)
+	public ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException ex) {
 
-        response.setTimestamp(Instant.now());
-        response.setStatus(HttpStatus.BAD_REQUEST.value());
-        response.setError("Bad Request");
-        response.setCode("VALIDATION_ERROR");
-        response.setMessage(
-                ex.getBindingResult()
-                        .getFieldError()
-                        .getDefaultMessage());
+		ErrorResponse response = new ErrorResponse();
 
-        //response.setTraceId(TraceIdUtil.getTraceId());
+		response.setTimestamp(Instant.now());
+		response.setStatus(HttpStatus.BAD_REQUEST.value());
+		response.setError("Bad Request");
+		response.setCode("VALIDATION_ERROR");
+		response.setMessage(ex.getBindingResult().getFieldError().getDefaultMessage());
 
-        return ResponseEntity.badRequest().body(response);
-    }
+		response.setTraceId(getTraceId());
 
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ErrorResponse> duplicate(
-            DataIntegrityViolationException ex) {
+		return ResponseEntity.badRequest().body(response);
+	}
 
-        ErrorResponse response = new ErrorResponse();
+	private String getTraceId() {
+		Span span = tracer.currentSpan();
+		return span != null ? span.context().traceId() : null;
+	}
 
-        response.setTimestamp(Instant.now());
-        response.setStatus(HttpStatus.CONFLICT.value());
-        response.setError("Conflict");
-        response.setCode("DUPLICATE_EVENT");
-        response.setMessage("Duplicate Event");
+	@ExceptionHandler(DataIntegrityViolationException.class)
+	public ResponseEntity<ErrorResponse> duplicate(DataIntegrityViolationException ex) {
 
-      //  response.setTraceId(TraceIdUtil.getTraceId());
+		ErrorResponse response = new ErrorResponse();
 
-        return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(response);
-    }
+		response.setTimestamp(Instant.now());
+		response.setStatus(HttpStatus.CONFLICT.value());
+		response.setError("Conflict");
+		response.setCode("DUPLICATE_EVENT");
+		response.setMessage("Duplicate Event");
 
-    @ExceptionHandler(ResourceAccessException.class)
-    public ResponseEntity<ErrorResponse> unavailable(
-            ResourceAccessException ex) {
+		response.setTraceId(getTraceId());
 
-        ErrorResponse response = new ErrorResponse();
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+	}
 
-        response.setTimestamp(Instant.now());
-        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
-        response.setError("Service Unavailable");
-        response.setCode("ACCOUNT_SERVICE_DOWN");
-        response.setMessage("Account Service is unavailable");
+	@ExceptionHandler(ResourceAccessException.class)
+	public ResponseEntity<ErrorResponse> unavailable(ResourceAccessException ex) {
 
-       // response.setTraceId(TraceIdUtil.getTraceId());
+		ErrorResponse response = new ErrorResponse();
 
-        return ResponseEntity
-                .status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(response);
-    }
+		response.setTimestamp(Instant.now());
+		response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+		response.setError("Service Unavailable");
+		response.setCode("ACCOUNT_SERVICE_DOWN");
+		response.setMessage("Account Service is unavailable");
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> generic(
-            Exception ex) {
+		response.setTraceId(getTraceId());
 
-        ErrorResponse response = new ErrorResponse();
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+	}
 
-        response.setTimestamp(Instant.now());
-        response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
-        response.setError("Internal Server Error");
-        response.setCode("INTERNAL_ERROR");
-        response.setMessage(ex.getMessage());
+	@ExceptionHandler(Exception.class)
+	public ResponseEntity<ErrorResponse> generic(Exception ex) {
 
-       // response.setTraceId(TraceIdUtil.getTraceId());
+		ErrorResponse response = new ErrorResponse();
 
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(response);
-    }
-    
-    @ExceptionHandler(AccountServiceUnavailableException.class)
-    public ResponseEntity<ErrorResponse> handleAccountServiceUnavailable(
-            AccountServiceUnavailableException ex) {
+		response.setTimestamp(Instant.now());
+		response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+		response.setError("Internal Server Error");
+		response.setCode("INTERNAL_ERROR");
+		response.setMessage(ex.getMessage());
 
-        ErrorResponse response = new ErrorResponse();
+		response.setTraceId(getTraceId());
 
-        response.setTimestamp(Instant.now());
-        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
-        response.setError("Service Unavailable");
-        response.setCode("ACCOUNT_SERVICE_UNAVAILABLE");
-        response.setMessage(ex.getMessage());
-       // response.setTraceId(TraceIdUtil.getTraceId());
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+	}
 
-        return ResponseEntity
-                .status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(response);
-    }
-    
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidJson(
-            HttpMessageNotReadableException ex) {
+	@ExceptionHandler(AccountServiceUnavailableException.class)
+	public ResponseEntity<ErrorResponse> handleAccountServiceUnavailable(AccountServiceUnavailableException ex) {
 
-        ErrorResponse response = new ErrorResponse();
+		ErrorResponse response = new ErrorResponse();
 
-        response.setTimestamp(Instant.now());
-        response.setStatus(HttpStatus.BAD_REQUEST.value());
-        response.setError("Bad Request");
-        response.setCode("INVALID_REQUEST");
+		response.setTimestamp(Instant.now());
+		response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+		response.setError("Service Unavailable");
+		response.setCode("ACCOUNT_SERVICE_UNAVAILABLE");
+		response.setMessage(ex.getMessage());
+		response.setTraceId(getTraceId());
 
-        Throwable cause = ex.getMostSpecificCause();
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+	}
 
-        if (cause instanceof InvalidFormatException ife &&
-                ife.getTargetType() == EventType.class) {
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity<ErrorResponse> handleInvalidJson(HttpMessageNotReadableException ex) {
 
-            response.setMessage(
-                    "Invalid event type. Allowed values are CREDIT and DEBIT.");
+		ErrorResponse response = new ErrorResponse();
 
-        } else {
+		response.setTimestamp(Instant.now());
+		response.setStatus(HttpStatus.BAD_REQUEST.value());
+		response.setError("Bad Request");
+		response.setCode("INVALID_REQUEST");
 
-            response.setMessage("Malformed request payload.");
-        }
+		Throwable cause = ex.getMostSpecificCause();
 
-        //response.setTraceId(TraceIdUtil.getTraceId());
+		if (cause instanceof InvalidFormatException ife && ife.getTargetType() == EventType.class) {
 
-        return ResponseEntity.badRequest().body(response);
-    }
+			response.setMessage("Invalid event type. Allowed values are CREDIT and DEBIT.");
+
+		} else {
+
+			response.setMessage("Malformed request payload.");
+		}
+
+		response.setTraceId(getTraceId());
+
+		return ResponseEntity.badRequest().body(response);
+	}
 
 }
