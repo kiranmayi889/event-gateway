@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: eventgateway
+    name: event-gateway
   datasource:
     url: jdbc:h2:mem:event_gateway_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driverClassName: org.h2.Driver
@@ -16,14 +16,14 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: false
+    show-sql: true
     properties:
       hibernate:
         format_sql: true
 
 account:
   service:
-    base-url: ${ACCOUNT_SERVICE_BASE_URL:http://localhost:8081}
+    base-url: http://localhost:8081
 
 management:
   endpoints:
@@ -54,7 +54,9 @@ resilience4j:
       accountService:
         timeoutDuration: 2s
 
-#logging:
-#  level:
-#    root: INFO
-#    com.example.eventgateway: INFO
+logging:
+  pattern:
+    console: "%d %-5level [%X{traceId}] %logger - %msg%n"
+  level:
+    root: INFO
+    com.example.eventgateway: INFO
