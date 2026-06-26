@@ -14,7 +14,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.retry.annotation.Recover;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -33,6 +32,8 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import jakarta.annotation.PostConstruct;
 
 @Service
@@ -51,6 +52,9 @@ public class EventGatewayService {
 
 	@Autowired
 	private MeterRegistry meterRegistry;
+
+	@Autowired
+	private Tracer tracer;
 
 	@Value("${account.service.base-url}")
 	private String accountServiceBaseUrl;
@@ -77,7 +81,7 @@ public class EventGatewayService {
 
 	@Retry(name = "accountService")
 	@CircuitBreaker(name = "accountService")
-	public EventResponse process(EventRequest request, String traceId) {
+	public EventResponse process(EventRequest request) {
 		log.info("Processing event started eventid= {} ", request.getEventId());
 		requestCounter.increment();
 
@@ -116,8 +120,8 @@ public class EventGatewayService {
 		repository.save(event);
 
 		HttpHeaders headers = new HttpHeaders();
-		headers.add("X-Trace-Id", traceId);
 		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.add("X-Trace-Id", tracer.currentSpan() != null ? tracer.currentSpan().context().traceId() : "");
 
 		HttpEntity<EventRequest> entity = new HttpEntity<>(request, headers);
 		ResponseEntity<EventResponse> response;
@@ -142,21 +146,6 @@ public class EventGatewayService {
 
 		return response.getBody();
 	}
-//
-//	@Recover
-//	public EventResponse recover(AccountServiceUnavailableException ex, EventRequest request, String traceId) {
-//
-//		Event event = repository.findById(request.getEventId())
-//				.orElseThrow(() -> new AccountServiceUnavailableException(
-//						"Account Service is unavailable. Please try again later."));
-//
-//		event.setStatus(EventStatus.FAILED);
-//
-//		repository.save(event);
-//		log.error("Account service is unavailable eventid= {} ", request.getEventId());
-//
-//		throw new AccountServiceUnavailableException("Account Service is unavailable. Please try again later.");
-//	}
 
 	public EventDto getEvent(String eventId) {
 
@@ -173,6 +162,8 @@ public class EventGatewayService {
 				.collect(Collectors.toList());
 	}
 
+	@Retry(name = "accountService")
+	@CircuitBreaker(name = "accountService")
 	public BalanceResponse getBalance(String accountId) {
 		try {
 

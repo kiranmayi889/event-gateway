@@ -11,13 +11,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
+@Tag(name = "Event API")
 public class HealthController {
 	
 	@Autowired
 	private HealthEndpoint healthEndpoint;
 
     @GetMapping("/health")
+    @Operation(summary = "Fetches Event Gateway Health")
     public ResponseEntity<Map<String, Object>> health() {
 
     	  HealthComponent health = healthEndpoint.health();

@@ -3,7 +3,6 @@ package com.coding.eventgateway.exception;
 import java.time.Instant;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -44,22 +43,6 @@ public class GlobalExceptionHandler {
 	private String getTraceId() {
 		Span span = tracer.currentSpan();
 		return span != null ? span.context().traceId() : null;
-	}
-
-	@ExceptionHandler(DataIntegrityViolationException.class)
-	public ResponseEntity<ErrorResponse> duplicate(DataIntegrityViolationException ex) {
-
-		ErrorResponse response = new ErrorResponse();
-
-		response.setTimestamp(Instant.now());
-		response.setStatus(HttpStatus.CONFLICT.value());
-		response.setError("Conflict");
-		response.setCode("DUPLICATE_EVENT");
-		response.setMessage("Duplicate Event");
-
-		response.setTraceId(getTraceId());
-
-		return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
 	}
 
 	@ExceptionHandler(ResourceAccessException.class)

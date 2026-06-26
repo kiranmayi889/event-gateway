@@ -20,11 +20,16 @@ import com.coding.eventgateway.dto.EventRequest;
 import com.coding.eventgateway.dto.EventResponse;
 import com.coding.eventgateway.service.EventGatewayService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/events")
+@Tag(name = "Event API", description = "Operations related to Event Gateway")
 public class EventController {
 	
 	private static final Logger log =
@@ -34,16 +39,21 @@ public class EventController {
     private EventGatewayService eventGatewayService;
 
     @PostMapping
+    @Operation(summary = "Submit an Event")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Event Created"),
+            @ApiResponse(responseCode = "400", description = "Invalid Request"),
+            @ApiResponse(responseCode = "503", description = "Account Service Unavailable")
+    })
     public ResponseEntity<EventResponse> publish(
             @Valid @RequestBody EventRequest request,
             HttpServletRequest servletRequest) {
 
-        //String traceId = TraceIdUtil.getTraceId(servletRequest);
-
         return ResponseEntity.ok(
-        		eventGatewayService.process(request, ""));
+        		eventGatewayService.process(request));
     }
     @GetMapping("/{eventId}")
+    @Operation(summary = "Get Event by ID")
     public EventDto getEvent(
             @PathVariable String eventId) {
 
@@ -51,6 +61,7 @@ public class EventController {
     }
 
     @GetMapping
+    @Operation(summary = "List Events by Account")
     public List<EventDto> getEvents(
             @RequestParam String account) {
 
