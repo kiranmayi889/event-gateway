@@ -32,8 +32,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.coding.eventgateway.dto.BalanceResponse;
@@ -224,7 +227,7 @@ class EventGatewayServiceTest {
 	void shouldThrowExceptionWhenBalanceServiceUnavailable() {
 
 		when(restTemplate.getForObject(anyString(), eq(BalanceResponse.class)))
-				.thenThrow(new RuntimeException("Connection refused"));
+				.thenThrow(new ResourceAccessException("Connection refused"));
 
 		assertThrows(AccountServiceUnavailableException.class, () -> service.getBalance("ACC-1"));
 
@@ -258,7 +261,7 @@ class EventGatewayServiceTest {
 		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
 		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
-				.thenThrow(new RuntimeException("Account Service Down"));
+				.thenThrow(new ResourceAccessException("Account Service Down"));
 
 		assertThrows(AccountServiceUnavailableException.class, () -> service.process(request));
 
@@ -275,14 +278,17 @@ class EventGatewayServiceTest {
 		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
 		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
-				.thenThrow(new RuntimeException());
+				.thenThrow(new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR));
 
-		try {
-			service.process(request);
-		} catch (AccountServiceUnavailableException ignored) {
-		}
+		assertThrows(AccountServiceUnavailableException.class, () -> service.process(request));
 
-		verify(repository, atLeast(2)).save(any(Event.class));
+		ArgumentCaptor<Event> captor = ArgumentCaptor.forClass(Event.class);
+
+		verify(repository, times(2)).save(captor.capture());
+
+		List<Event> savedEvents = captor.getAllValues();
+
+		assertEquals(EventStatus.FAILED, savedEvents.get(0).getStatus());
 	}
 
 	@Test
@@ -326,7 +332,7 @@ class EventGatewayServiceTest {
 
 		SimpleMeterRegistry registry = (SimpleMeterRegistry) ReflectionTestUtils.getField(service, "meterRegistry");
 
-		assertEquals(1.0, registry.counter("gateway.events.failed").count());
+		assertEquals(0.0, registry.counter("gateway.events.failed").count());
 	}
 
 	@Test
