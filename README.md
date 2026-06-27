@@ -61,7 +61,7 @@ Main APIs
                 Client
                   │
                   ▼
-        Event Gateway Service
+        Event Gateway Service (H2 Database)
                   │
         REST API (HTTP)
                   │
@@ -135,89 +135,9 @@ git hub link - https://github.com/kiranmayi889
 
 ## Step 2 - Build the Projects
 
-### Build Account Service
-
-```bash
-cd account-service
-mvn clean install
-```
-
-### Build Event Gateway
-
-```bash
-cd ../event-gateway
-mvn clean install
-```
-
----
-
-## Step 3 - Start Account Service
-
-Open a terminal.
-
-```bash
-cd account-service
-mvn spring-boot:run
-```
-
-Account Service starts on:
-
-```text
-http://localhost:8081
-```
-
----
-
-## Step 4 - Start Event Gateway
-
-Open another terminal.
-
-```bash
-cd event-gateway
-mvn spring-boot:run
-```
-
-Gateway starts on:
-
-```text
-http://localhost:8080
-```
-
-The Gateway communicates with the Account Service at:
-
-```text
-http://localhost:8081
-```
-
----
-
-## Verify Services
-
-Gateway Health
-
-```text
-GET http://localhost:8080/actuator/health
-```
-
-Account Service Health
-
-```text
-GET http://localhost:8081/actuator/health
-```
-
-Expected response
-
-```json
-{
-  "status": "UP"
-}
-```
-
----
-
 # Running the Application using Spring Tool Suite (STS)
 
-## Step 1 - Import Projects
+## Step  - Import Projects
 
 1. Open Spring Tool Suite (STS).
 2. Select **File → Import**.
@@ -232,23 +152,10 @@ Expected response
 
 ---
 
-## Step 2 - Run Account Service
+## Step - Run Account Service
 
-1. Expand **account-service**.
-2. Navigate to:
-
-```text
-src/main/java
-```
-
-3. Open:
-
-```text
-AccountServiceApplication.java
-```
-
-4. Right-click the file.
-5. Select:
+1. Right-click **accountservice** on the folder.
+2. Select:
 
 ```text
 Run As → Spring Boot App
@@ -268,23 +175,10 @@ http://localhost:8081
 
 ---
 
-## Step 3 - Run Event Gateway
+## Step  - Run Event Gateway
 
-1. Expand **event-gateway**.
-2. Navigate to:
-
-```text
-src/main/java
-```
-
-3. Open:
-
-```text
-EventGatewayApplication.java
-```
-
-4. Right-click the file.
-5. Select:
+1. Right-click on **event-gateway** on the folder.
+2. Select:
 
 ```text
 Run As → Spring Boot App
@@ -380,6 +274,14 @@ You can also run an individual test class by right-clicking the test class and s
 Run As → JUnit Test
 ```
 
+Tests include:
+
+* Unit Tests
+* Controller Tests
+* Integration Tests
+* Trace Propagation Tests
+* Resiliency Tests
+
 ---
 
 # Custom Metrics
@@ -436,22 +338,6 @@ GET http://localhost:8081/actuator/metrics/account.transactions.requests
 
 These metrics help monitor request volume, successful processing, failures, and duplicate requests, providing operational insight into both services.
 
-
-# Running Tests
-
-Run all tests
-
-```bash
-mvn test
-```
-
-Tests include:
-
-* Unit Tests
-* Controller Tests
-* Integration Tests
-* Trace Propagation Tests
-* Resiliency Tests
 
 ---
 
@@ -561,3 +447,130 @@ This enables end-to-end request tracing across both services.
 * Supported transaction types are CREDIT and DEBIT.
 * Each service owns its own database.
 * Services communicate only through REST APIs.
+
+-------------------------------------------------------------------------------------------
+
+# Additional Features Implemented
+
+Beyond the mandatory assignment requirements, the following production-grade enhancements have been implemented to improve resilience, observability, and reliability.
+
+## 1. OpenTelemetry + OpenTelemetry Collector + Jaeger
+
+Implemented end-to-end distributed tracing using OpenTelemetry.
+
+### Features
+
+* Automatic trace generation for incoming HTTP requests.
+* Trace context propagation from **Event Gateway** to **Account Service**.
+* OpenTelemetry Collector receives traces from both services.
+* Jaeger is used for distributed trace visualization.
+* Every request can be traced across both microservices using a single Trace ID.
+
+### Access
+
+Jaeger UI:
+
+```text
+http://localhost:16686
+```
+
+---
+
+## 2. Prometheus Metrics Endpoint
+
+Both services expose Prometheus-compatible metrics using Spring Boot Actuator and Micrometer.
+
+### Gateway Metrics
+
+* gateway.events.requests
+* gateway.events.success
+* gateway.events.failed
+* gateway.events.duplicate
+
+### Account Service Metrics
+
+* account.transactions.requests
+* account.transactions.success
+* account.transactions.failed
+* account.transactions.duplicate
+
+### Endpoints
+
+Gateway
+
+```text
+http://localhost:8080/actuator/prometheus
+```
+
+Account Service
+
+```text
+http://localhost:8081/actuator/prometheus
+```
+
+These endpoints can be scraped by any Prometheus-compatible monitoring system.
+
+---
+
+## 3. Retry with Exponential Backoff and Jitter
+
+Resilience4j Retry has been configured to automatically retry transient failures when the Account Service is unavailable.
+
+### Features
+
+* Configurable retry attempts.
+* Exponential backoff between retries.
+* Randomized jitter to prevent synchronized retry storms.
+* Automatic retry before reporting failure to the client.
+
+This improves resilience against temporary network failures and service outages.
+
+---
+
+## 4. Gateway Rate Limiting
+
+The Event Gateway implements request rate limiting to protect downstream services from excessive traffic.
+
+### Features
+
+* Limits the number of requests accepted within a configured time window.
+* Returns **HTTP 429 (Too Many Requests)** when the limit is exceeded.
+* Prevents accidental overload of the Gateway and Account Service.
+
+---
+
+## 5. Asynchronous Fallback for Account Service Failures
+
+When the Account Service is temporarily unavailable, the Gateway does not immediately discard the request.
+
+### Workflow
+
+1. The incoming event is persisted locally.
+2. The event status is updated to **QUEUED**.
+3. A scheduler periodically retries queued events.
+4. When the Account Service becomes available, queued events are automatically processed.
+5. Successfully processed events are marked as **PROCESSED**.
+6. Events that exceed the configured retry threshold are marked as **FAILED**.
+
+### Retry Policy
+
+* Configurable maximum retry attempts.
+* Exponential retry scheduling.
+* Retry count maintained for each queued event.
+* Failed events are retained for operational visibility and troubleshooting.
+
+This approach provides eventual consistency while ensuring events are not lost during temporary downstream outages.
+
+---
+
+## 6. Observability
+
+The solution provides comprehensive observability through:
+
+* Distributed tracing with OpenTelemetry and Jaeger.
+* Prometheus-compatible metrics.
+* Custom Micrometer counters.
+* Health endpoints using Spring Boot Actuator.
+* Structured application logging with Trace IDs for end-to-end request correlation.
+
+These capabilities make the system easier to monitor, troubleshoot, and operate in production environments.

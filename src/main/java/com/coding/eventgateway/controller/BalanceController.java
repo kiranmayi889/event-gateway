@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.coding.eventgateway.dto.AccountDetailsResponse;
 import com.coding.eventgateway.dto.BalanceResponse;
 import com.coding.eventgateway.service.EventGatewayService;
 
@@ -28,6 +29,14 @@ public class BalanceController {
             @PathVariable String accountId) {
 
         return eventGatewayService.getBalance(accountId);
+    }
+    
+    @GetMapping("/{accountId}")
+    @Operation(summary = "Fetches account details")
+    public AccountDetailsResponse accountDetails(
+            @PathVariable String accountId) {
+
+        return eventGatewayService.getAccountDetails(accountId);
     }
 
 }

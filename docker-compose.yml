@@ -5,6 +5,10 @@ services:
     container_name: account-service
     ports:
       - "8081:8081"
+    depends_on:
+      - otel-collector
+    environment:
+        MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     restart: unless-stopped
 
   event-gateway:
@@ -14,6 +18,23 @@ services:
       - "8080:8080"
     depends_on:
       - account-service
+      - otel-collector
     environment:
       ACCOUNT_SERVICE_BASE_URL: http://account-service:8081
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
     restart: unless-stopped
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command:
+      - "--config=/etc/otelcol/config.yaml"
+    volumes:
+      - ./observability/otel-collector-config.yml:/etc/otelcol/config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - jaeger
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"

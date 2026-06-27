@@ -15,16 +15,19 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import com.coding.eventgateway.dto.AccountDetailsResponse;
 import com.coding.eventgateway.dto.BalanceResponse;
 import com.coding.eventgateway.dto.Event;
 import com.coding.eventgateway.dto.EventDto;
 import com.coding.eventgateway.dto.EventRequest;
 import com.coding.eventgateway.dto.EventResponse;
 import com.coding.eventgateway.dto.EventStatus;
+import com.coding.eventgateway.exception.AccountNotFoundException;
 import com.coding.eventgateway.exception.AccountServiceUnavailableException;
 import com.coding.eventgateway.repository.EventRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -139,6 +142,14 @@ public class EventGatewayService {
 			repository.save(event);
 			successCounter.increment();
 
+		} catch (HttpClientErrorException.NotFound ex) {
+
+			failureCounter.increment();
+			log.error("Requested account not found. accountId={}", request.getAccountId());
+			event.setStatus(EventStatus.FAILED);
+			repository.save(event);
+			throw new AccountNotFoundException(request.getAccountId());
+
 		} catch (ResourceAccessException e) {
 			failureCounter.increment();
 			log.error("Account service is unavailable eventid= {} ", request.getEventId());
@@ -151,10 +162,14 @@ public class EventGatewayService {
 							The event has been queued and will be processed automatically when the service becomes available.""");
 		} catch (HttpStatusCodeException e) {
 			failureCounter.increment();
-			log.error("Account service retrned error for eventid= {} ", request.getEventId());
+			log.error("Account service retrned error or invalid request send to account service for eventid= {} ",
+					request.getEventId());
 			event.setStatus(EventStatus.FAILED);
 			repository.save(event);
 			throw new AccountServiceUnavailableException("Account Service is unavailable");
+		} catch (Exception e) {
+			log.error("request failed for account event= {} ", request.getEventId());
+			throw e;
 		}
 
 		return response.getBody();
@@ -184,10 +199,40 @@ public class EventGatewayService {
 			return restTemplate.getForObject(accountServiceBaseUrl + "/accounts/" + accountId + "/balance",
 					BalanceResponse.class);
 
-		} catch (Exception ex) {
+		} catch (HttpClientErrorException.NotFound ex) {
+			log.error("requested account details are found for accountid= {} ", accountId);
+			throw new AccountNotFoundException(accountId);
+
+		} catch (ResourceAccessException ex) {
 			log.error("error retrieved while fetching balance from account service for account accountid= {} ",
 					accountId);
 			throw new AccountServiceUnavailableException("Account Service is unavailable");
+		} catch (Exception e) {
+			log.error("request failed for account accountid= {} ", accountId);
+			throw e;
+		}
+	}
+
+	@Retry(name = "accountService")
+	@CircuitBreaker(name = "accountService")
+	public AccountDetailsResponse getAccountDetails(String accountId) {
+		try {
+
+			log.info("fetching account details from account service for account accountid= {} ", accountId);
+			return restTemplate.getForObject(accountServiceBaseUrl + "/accounts/" + accountId,
+					AccountDetailsResponse.class);
+
+		} catch (HttpClientErrorException.NotFound ex) {
+			log.error("requested account details are found for accountid= {} ", accountId);
+			throw new AccountNotFoundException(accountId);
+
+		} catch (ResourceAccessException ex) {
+			log.error("error retrieved while fetching account details from account service for account accountid= {} ",
+					accountId);
+			throw new AccountServiceUnavailableException("Account Service is unavailable");
+		} catch (Exception e) {
+			log.error("request failed for account accountid= {} ", accountId);
+			throw e;
 		}
 	}
 

@@ -44,6 +44,9 @@ management:
     metrics:
       export:
         enabled: true 
+  otlp:
+    tracing:
+      endpoint: http://otel-collector:4318/v1/traces
 otel:
   service:
     name: gateway-service
@@ -51,7 +54,6 @@ otel:
   exporter:
     otlp:
       endpoint: http://localhost:4317
-
 resilience4j:
   circuitbreaker:
     circuitBreakerAspectOrder: 1

@@ -77,7 +77,7 @@ public class GlobalExceptionHandler {
 
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
 	}
-	
+
 	@ExceptionHandler(HttpStatusCodeException.class)
 	public ResponseEntity<ErrorResponse> httpStatusException(HttpStatusCodeException ex) {
 
@@ -133,6 +133,21 @@ public class GlobalExceptionHandler {
 		response.setTraceId(getTraceId());
 
 		return ResponseEntity.badRequest().body(response);
+	}
+
+	@ExceptionHandler(AccountNotFoundException.class)
+	public ResponseEntity<ErrorResponse> handleAccountNotFoundException(AccountNotFoundException ex) {
+
+		ErrorResponse response = new ErrorResponse();
+
+		response.setTimestamp(Instant.now());
+		response.setStatus(HttpStatus.NOT_FOUND.value());
+		response.setError("Account Not Found");
+		response.setCode("ACCOUNT_NOT_FOUND");
+		response.setMessage(ex.getMessage());
+		response.setTraceId(getTraceId());
+
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
 	}
 
 }
