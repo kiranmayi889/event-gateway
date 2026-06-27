@@ -15,6 +15,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.coding.eventgateway.dto.BalanceResponse;
@@ -32,7 +34,6 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import jakarta.annotation.PostConstruct;
 
@@ -121,6 +122,8 @@ public class EventGatewayService {
 
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
+		// since the requirement asked to set it manually, I have set in the header.
+		// Open telemetry automatically propogates the trace id to account service
 		headers.add("X-Trace-Id", tracer.currentSpan() != null ? tracer.currentSpan().context().traceId() : "");
 
 		HttpEntity<EventRequest> entity = new HttpEntity<>(request, headers);
@@ -136,9 +139,19 @@ public class EventGatewayService {
 			repository.save(event);
 			successCounter.increment();
 
-		} catch (Exception e) {
+		} catch (ResourceAccessException e) {
 			failureCounter.increment();
 			log.error("Account service is unavailable eventid= {} ", request.getEventId());
+			// Async fallback:
+			event.setStatus(EventStatus.QUEUED);
+			repository.save(event);
+			throw new AccountServiceUnavailableException(
+					"""
+							Account Service is currently unavailable.
+							The event has been queued and will be processed automatically when the service becomes available.""");
+		} catch (HttpStatusCodeException e) {
+			failureCounter.increment();
+			log.error("Account service retrned error for eventid= {} ", request.getEventId());
 			event.setStatus(EventStatus.FAILED);
 			repository.save(event);
 			throw new AccountServiceUnavailableException("Account Service is unavailable");

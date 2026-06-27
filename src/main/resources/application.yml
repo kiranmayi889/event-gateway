@@ -40,6 +40,10 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+  prometheus:
+    metrics:
+      export:
+        enabled: true 
 otel:
   service:
     name: gateway-service
@@ -68,6 +72,8 @@ resilience4j:
         waitDuration: 300ms
         enableExponentialBackoff: true
         exponentialBackoffMultiplier: 2
+        enableRandomizedWait: true
+        randomizedWaitFactor: 0.5
         retryExceptions:
           - com.coding.eventgateway.exception.AccountServiceUnavailableException
 springdoc:
@@ -77,4 +83,11 @@ springdoc:
     tags-sorter: alpha
 
   api-docs:
-    path: /v3/api-docs
+    path: /v3/api-docs		
+event:
+  retry:
+    max-attempts: 3
+gateway:
+  rate-limit:
+    capacity: 10
+    refill: 10

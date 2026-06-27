@@ -1,6 +1,5 @@
 package com.coding.eventgateway.dto;
 
-
 import java.math.BigDecimal;
 import java.time.Instant;
 
@@ -16,105 +15,128 @@ import jakarta.persistence.Table;
 @Table(name = "event")
 public class Event {
 
-    @Id
-    @Column(nullable = false, updatable = false)
-    private String eventId;
+	@Id
+	@Column(nullable = false, updatable = false)
+	private String eventId;
 
-    @Column(nullable = false)
-    private String accountId;
+	@Column(nullable = false)
+	private String accountId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private EventType type;
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private EventType type;
 
-    @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal amount;
+	@Column(nullable = false, precision = 19, scale = 2)
+	private BigDecimal amount;
 
-    @Column(nullable = false)
-    private String currency;
+	@Column(nullable = false)
+	private String currency;
 
-    @Column(nullable = false)
-    private Instant eventTimestamp;
+	@Column(nullable = false)
+	private Instant eventTimestamp;
 
-    @Lob
-    private String metadataJson;
+	@Lob
+	private String metadataJson;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private EventStatus status;
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private EventStatus status;
 
-    @Column(nullable = false)
-    private Instant createdAt;
+	@Column(nullable = false)
+	private Instant createdAt;
 
-    public String getEventId() {
-        return eventId;
-    }
+	@Column(name = "retry_count")
+	private Integer retryCount = 0;
 
-    public void setEventId(String eventId) {
-        this.eventId = eventId;
-    }
+	@Column(name = "next_retry_time")
+	private Instant nextRetryTime;
 
-    public String getAccountId() {
-        return accountId;
-    }
+	public String getEventId() {
+		return eventId;
+	}
 
-    public void setAccountId(String accountId) {
-        this.accountId = accountId;
-    }
+	public void setEventId(String eventId) {
+		this.eventId = eventId;
+	}
 
-    public EventType getType() {
-        return type;
-    }
+	public String getAccountId() {
+		return accountId;
+	}
 
-    public void setType(EventType type) {
-        this.type = type;
-    }
+	public void setAccountId(String accountId) {
+		this.accountId = accountId;
+	}
 
-    public BigDecimal getAmount() {
-        return amount;
-    }
+	public EventType getType() {
+		return type;
+	}
 
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
+	public void setType(EventType type) {
+		this.type = type;
+	}
 
-    public String getCurrency() {
-        return currency;
-    }
+	public BigDecimal getAmount() {
+		return amount;
+	}
 
-    public void setCurrency(String currency) {
-        this.currency = currency;
-    }
+	public void setAmount(BigDecimal amount) {
+		this.amount = amount;
+	}
 
-    public Instant getEventTimestamp() {
-        return eventTimestamp;
-    }
+	public String getCurrency() {
+		return currency;
+	}
 
-    public void setEventTimestamp(Instant eventTimestamp) {
-        this.eventTimestamp = eventTimestamp;
-    }
+	public void setCurrency(String currency) {
+		this.currency = currency;
+	}
 
-    public String getMetadataJson() {
-        return metadataJson;
-    }
+	public Instant getEventTimestamp() {
+		return eventTimestamp;
+	}
 
-    public void setMetadataJson(String metadataJson) {
-        this.metadataJson = metadataJson;
-    }
+	public void setEventTimestamp(Instant eventTimestamp) {
+		this.eventTimestamp = eventTimestamp;
+	}
 
-    public EventStatus getStatus() {
-        return status;
-    }
+	public String getMetadataJson() {
+		return metadataJson;
+	}
 
-    public void setStatus(EventStatus status) {
-        this.status = status;
-    }
+	public void setMetadataJson(String metadataJson) {
+		this.metadataJson = metadataJson;
+	}
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+	public EventStatus getStatus() {
+		return status;
+	}
 
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+	public void setStatus(EventStatus status) {
+		this.status = status;
+	}
+
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(Instant createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public Integer getRetryCount() {
+		return retryCount;
+	}
+
+	public void setRetryCount(Integer retryCount) {
+		this.retryCount = retryCount;
+	}
+
+	public Instant getNextRetryTime() {
+		return nextRetryTime;
+	}
+
+	public void setNextRetryTime(Instant nextRetryTime) {
+		this.nextRetryTime = nextRetryTime;
+	}
+
 }

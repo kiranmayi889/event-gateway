@@ -51,465 +51,338 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
-import io.opentelemetry.api.trace.SpanContext;
-
 
 @ExtendWith(MockitoExtension.class)
 class EventGatewayServiceTest {
 
-    @Mock
-    private EventRepository repository;
+	@Mock
+	private EventRepository repository;
 
-    @Mock
-    private RestTemplate restTemplate;
-    
-    @Mock
-    private Tracer tracer;
+	@Mock
+	private RestTemplate restTemplate;
 
-    @Mock
-    private ObjectMapper objectMapper;
+	@Mock
+	private Tracer tracer;
 
-    @InjectMocks
-    private EventGatewayService service;
+	@Mock
+	private ObjectMapper objectMapper;
 
-    @BeforeEach
-    void setup() {
+	@InjectMocks
+	private EventGatewayService service;
 
-        ReflectionTestUtils.setField(
-                service,
-                "meterRegistry",
-                new SimpleMeterRegistry());
+	@BeforeEach
+	void setup() {
 
-        ReflectionTestUtils.setField(
-                service,
-                "accountServiceBaseUrl",
-                "http://localhost:8081");
+		ReflectionTestUtils.setField(service, "meterRegistry", new SimpleMeterRegistry());
 
-        service.init();
-    }
+		ReflectionTestUtils.setField(service, "accountServiceBaseUrl", "http://localhost:8081");
 
-    private EventRequest request() {
+		service.init();
+	}
 
-        EventRequest request = new EventRequest();
+	private EventRequest request() {
 
-        request.setEventId("EVT-100");
-        request.setAccountId("ACC-1");
-        request.setAmount(BigDecimal.valueOf(100));
-        request.setCurrency("USD");
-        request.setType(EventType.CREDIT);
-        request.setEventTimestamp(Instant.now());
-        request.setMetadata(Map.of("source", "ATM"));
+		EventRequest request = new EventRequest();
 
-        return request;
-    }
+		request.setEventId("EVT-100");
+		request.setAccountId("ACC-1");
+		request.setAmount(BigDecimal.valueOf(100));
+		request.setCurrency("USD");
+		request.setType(EventType.CREDIT);
+		request.setEventTimestamp(Instant.now());
+		request.setMetadata(Map.of("source", "ATM"));
 
-    @Test
-    void shouldProcessNewEventSuccessfully() throws Exception {
+		return request;
+	}
 
-        EventRequest request = request();
+	@Test
+	void shouldProcessNewEventSuccessfully() throws Exception {
 
-        when(repository.findById("EVT-100"))
-                .thenReturn(Optional.empty());
+		EventRequest request = request();
 
-        when(objectMapper.writeValueAsString(any()))
-                .thenReturn("{}");
+		when(repository.findById("EVT-100")).thenReturn(Optional.empty());
 
-        EventResponse accountResponse = new EventResponse();
-        accountResponse.setAccountId("ACC-1");
-        accountResponse.setEventId("EVT-100");
-        accountResponse.setTransactionStatus("PROCESSED");
+		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(EventResponse.class)))
-                .thenReturn(ResponseEntity.ok(accountResponse));
+		EventResponse accountResponse = new EventResponse();
+		accountResponse.setAccountId("ACC-1");
+		accountResponse.setEventId("EVT-100");
+		accountResponse.setTransactionStatus("PROCESSED");
 
-        EventResponse response = service.process(request);
+		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
+				.thenReturn(ResponseEntity.ok(accountResponse));
 
-        assertNotNull(response);
-        assertEquals("EVT-100", response.getEventId());
-        assertEquals("ACC-1", response.getAccountId());
+		EventResponse response = service.process(request);
 
-        verify(repository, times(2))
-                .save(any(Event.class));
+		assertNotNull(response);
+		assertEquals("EVT-100", response.getEventId());
+		assertEquals("ACC-1", response.getAccountId());
 
-        verify(restTemplate, times(1))
-                .exchange(anyString(),
-                        eq(HttpMethod.POST),
-                        any(HttpEntity.class),
-                        eq(EventResponse.class));
-    }
+		verify(repository, times(2)).save(any(Event.class));
 
-    @Test
-    void shouldReturnDuplicateWhenAlreadyProcessed() {
+		verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class),
+				eq(EventResponse.class));
+	}
 
-        Event existing = new Event();
+	@Test
+	void shouldReturnDuplicateWhenAlreadyProcessed() {
 
-        existing.setEventId("EVT-100");
-        existing.setAccountId("ACC-1");
-        existing.setStatus(EventStatus.PROCESSED);
+		Event existing = new Event();
 
-        when(repository.findById("EVT-100"))
-                .thenReturn(Optional.of(existing));
+		existing.setEventId("EVT-100");
+		existing.setAccountId("ACC-1");
+		existing.setStatus(EventStatus.PROCESSED);
 
-        EventResponse response =
-                service.process(request());
+		when(repository.findById("EVT-100")).thenReturn(Optional.of(existing));
 
-        assertTrue(response.isDuplicate());
+		EventResponse response = service.process(request());
 
-        assertEquals(
-                "PROCESSED",
-                response.getTransactionStatus());
-
-        verify(restTemplate, never())
-                .exchange(anyString(),
-                        any(),
-                        any(),
-                        eq(EventResponse.class));
-    }
+		assertTrue(response.isDuplicate());
 
-    @Test
-    void shouldReturnEventById() throws Exception {
+		assertEquals("PROCESSED", response.getTransactionStatus());
 
-        Event event = new Event();
+		verify(restTemplate, never()).exchange(anyString(), any(), any(), eq(EventResponse.class));
+	}
 
-        event.setEventId("EVT-100");
-        event.setAccountId("ACC-1");
-        event.setAmount(BigDecimal.valueOf(100));
-        event.setCurrency("USD");
-        event.setMetadataJson("{\"source\":\"ATM\"}");
+	@Test
+	void shouldReturnEventById() throws Exception {
 
-        when(repository.findById("EVT-100"))
-                .thenReturn(Optional.of(event));
+		Event event = new Event();
 
-        when(objectMapper.readValue(
-                anyString(),
-                any(TypeReference.class)))
-                .thenReturn(Map.of("source", "ATM"));
+		event.setEventId("EVT-100");
+		event.setAccountId("ACC-1");
+		event.setAmount(BigDecimal.valueOf(100));
+		event.setCurrency("USD");
+		event.setMetadataJson("{\"source\":\"ATM\"}");
 
-        EventDto dto =
-                service.getEvent("EVT-100");
+		when(repository.findById("EVT-100")).thenReturn(Optional.of(event));
 
-        assertEquals(
-                "EVT-100",
-                dto.getEventId());
+		when(objectMapper.readValue(anyString(), any(TypeReference.class))).thenReturn(Map.of("source", "ATM"));
 
-        assertEquals(
-                "ACC-1",
-                dto.getAccountId());
+		EventDto dto = service.getEvent("EVT-100");
 
-        assertEquals(
-                "ATM",
-                dto.getMetadata().get("source"));
-    }
+		assertEquals("EVT-100", dto.getEventId());
 
-    @Test
-    void shouldReturnEmptyEventWhenNotFound() {
+		assertEquals("ACC-1", dto.getAccountId());
 
-        when(repository.findById(anyString()))
-                .thenReturn(Optional.empty());
+		assertEquals("ATM", dto.getMetadata().get("source"));
+	}
 
-        EventDto dto =
-                service.getEvent("EVT-100");
+	@Test
+	void shouldReturnEmptyEventWhenNotFound() {
 
-        assertNull(dto.getEventId());
-    }
+		when(repository.findById(anyString())).thenReturn(Optional.empty());
 
-    @Test
-    void shouldReturnEventsForAccount() throws Exception {
+		EventDto dto = service.getEvent("EVT-100");
 
-        Event e1 = new Event();
-        e1.setEventId("E1");
-        e1.setMetadataJson("{}");
+		assertNull(dto.getEventId());
+	}
 
-        Event e2 = new Event();
-        e2.setEventId("E2");
-        e2.setMetadataJson("{}");
+	@Test
+	void shouldReturnEventsForAccount() throws Exception {
 
-        when(repository
-                .findByAccountIdOrderByEventTimestampDesc("ACC-1"))
-                .thenReturn(List.of(e1, e2));
+		Event e1 = new Event();
+		e1.setEventId("E1");
+		e1.setMetadataJson("{}");
 
-        when(objectMapper.readValue(
-                anyString(),
-                any(TypeReference.class)))
-                .thenReturn(Collections.emptyMap());
+		Event e2 = new Event();
+		e2.setEventId("E2");
+		e2.setMetadataJson("{}");
 
-        List<EventDto> events =
-                service.getEvents("ACC-1");
+		when(repository.findByAccountIdOrderByEventTimestampDesc("ACC-1")).thenReturn(List.of(e1, e2));
 
-        assertEquals(2, events.size());
+		when(objectMapper.readValue(anyString(), any(TypeReference.class))).thenReturn(Collections.emptyMap());
 
-        assertEquals(
-                "E1",
-                events.get(0).getEventId());
+		List<EventDto> events = service.getEvents("ACC-1");
 
-        assertEquals(
-                "E2",
-                events.get(1).getEventId());
-    }
-    
-    @Test
-    void shouldReturnBalanceSuccessfully() {
+		assertEquals(2, events.size());
 
-        BalanceResponse response = new BalanceResponse();
-        response.setAccountId("ACC-1");
-        response.setBalance(BigDecimal.valueOf(500));
+		assertEquals("E1", events.get(0).getEventId());
 
-        when(restTemplate.getForObject(
-                anyString(),
-                eq(BalanceResponse.class)))
-                .thenReturn(response);
+		assertEquals("E2", events.get(1).getEventId());
+	}
 
-        BalanceResponse result = service.getBalance("ACC-1");
+	@Test
+	void shouldReturnBalanceSuccessfully() {
 
-        assertNotNull(result);
-        assertEquals("ACC-1", result.getAccountId());
-        assertEquals(BigDecimal.valueOf(500), result.getBalance());
+		BalanceResponse response = new BalanceResponse();
+		response.setAccountId("ACC-1");
+		response.setBalance(BigDecimal.valueOf(500));
 
-        verify(restTemplate, times(1))
-                .getForObject(anyString(), eq(BalanceResponse.class));
-    }
+		when(restTemplate.getForObject(anyString(), eq(BalanceResponse.class))).thenReturn(response);
 
-    @Test
-    void shouldThrowExceptionWhenBalanceServiceUnavailable() {
+		BalanceResponse result = service.getBalance("ACC-1");
 
-        when(restTemplate.getForObject(
-                anyString(),
-                eq(BalanceResponse.class)))
-                .thenThrow(new RuntimeException("Connection refused"));
+		assertNotNull(result);
+		assertEquals("ACC-1", result.getAccountId());
+		assertEquals(BigDecimal.valueOf(500), result.getBalance());
 
-        assertThrows(AccountServiceUnavailableException.class,
-                () -> service.getBalance("ACC-1"));
+		verify(restTemplate, times(1)).getForObject(anyString(), eq(BalanceResponse.class));
+	}
 
-        verify(restTemplate, times(1))
-                .getForObject(anyString(), eq(BalanceResponse.class));
-    }
+	@Test
+	void shouldThrowExceptionWhenBalanceServiceUnavailable() {
 
-    @Test
-    void shouldReturnNullMetadataWhenJsonParsingFails() throws Exception {
+		when(restTemplate.getForObject(anyString(), eq(BalanceResponse.class)))
+				.thenThrow(new RuntimeException("Connection refused"));
 
-        Event event = new Event();
-        event.setEventId("EVT-100");
-        event.setMetadataJson("INVALID");
+		assertThrows(AccountServiceUnavailableException.class, () -> service.getBalance("ACC-1"));
 
-        when(repository.findById("EVT-100"))
-                .thenReturn(Optional.of(event));
+		verify(restTemplate, times(1)).getForObject(anyString(), eq(BalanceResponse.class));
+	}
 
-        when(objectMapper.readValue(
-                anyString(),
-                any(TypeReference.class)))
-                .thenThrow(new RuntimeException());
+	@Test
+	void shouldReturnNullMetadataWhenJsonParsingFails() throws Exception {
 
-        EventDto dto = service.getEvent("EVT-100");
+		Event event = new Event();
+		event.setEventId("EVT-100");
+		event.setMetadataJson("INVALID");
 
-        assertNotNull(dto);
-        assertNull(dto.getMetadata());
-    }
+		when(repository.findById("EVT-100")).thenReturn(Optional.of(event));
 
-    @Test
-    void shouldThrowExceptionWhenAccountServiceUnavailableDuringProcess() throws Exception {
+		when(objectMapper.readValue(anyString(), any(TypeReference.class))).thenThrow(new RuntimeException());
 
-        EventRequest request = request();
+		EventDto dto = service.getEvent("EVT-100");
 
-        when(repository.findById(anyString()))
-                .thenReturn(Optional.empty());
+		assertNotNull(dto);
+		assertNull(dto.getMetadata());
+	}
 
-        when(objectMapper.writeValueAsString(any()))
-                .thenReturn("{}");
+	@Test
+	void shouldThrowExceptionWhenAccountServiceUnavailableDuringProcess() throws Exception {
 
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(EventResponse.class)))
-                .thenThrow(new RuntimeException("Account Service Down"));
+		EventRequest request = request();
 
-        assertThrows(AccountServiceUnavailableException.class,
-                () -> service.process(request));
+		when(repository.findById(anyString())).thenReturn(Optional.empty());
 
-        verify(repository, atLeast(2))
-                .save(any(Event.class));
-    }
+		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
-    @Test
-    void shouldSaveFailedStatusWhenAccountServiceFails() throws Exception {
+		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
+				.thenThrow(new RuntimeException("Account Service Down"));
 
-        EventRequest request = request();
+		assertThrows(AccountServiceUnavailableException.class, () -> service.process(request));
 
-        when(repository.findById(anyString()))
-                .thenReturn(Optional.empty());
+		verify(repository, atLeast(2)).save(any(Event.class));
+	}
 
-        when(objectMapper.writeValueAsString(any()))
-                .thenReturn("{}");
+	@Test
+	void shouldSaveFailedStatusWhenAccountServiceFails() throws Exception {
 
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(EventResponse.class)))
-                .thenThrow(new RuntimeException());
+		EventRequest request = request();
 
-        try {
-            service.process(request);
-        } catch (AccountServiceUnavailableException ignored) {
-        }
+		when(repository.findById(anyString())).thenReturn(Optional.empty());
 
-        verify(repository, atLeast(2))
-                .save(any(Event.class));
-    }
+		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
-    @Test
-    void shouldIncrementSuccessCounter() throws Exception {
+		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
+				.thenThrow(new RuntimeException());
 
-        EventRequest request = request();
+		try {
+			service.process(request);
+		} catch (AccountServiceUnavailableException ignored) {
+		}
 
-        when(repository.findById(anyString()))
-                .thenReturn(Optional.empty());
+		verify(repository, atLeast(2)).save(any(Event.class));
+	}
 
-        when(objectMapper.writeValueAsString(any()))
-                .thenReturn("{}");
+	@Test
+	void shouldIncrementSuccessCounter() throws Exception {
 
-        EventResponse accountResponse = new EventResponse();
-        accountResponse.setEventId("EVT-100");
+		EventRequest request = request();
 
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(EventResponse.class)))
-                .thenReturn(ResponseEntity.ok(accountResponse));
+		when(repository.findById(anyString())).thenReturn(Optional.empty());
 
-        service.process(request);
+		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
-        SimpleMeterRegistry registry =
-                (SimpleMeterRegistry) ReflectionTestUtils.getField(
-                        service,
-                        "meterRegistry");
+		EventResponse accountResponse = new EventResponse();
+		accountResponse.setEventId("EVT-100");
 
-        assertEquals(
-                1.0,
-                registry.counter("gateway.events.success").count());
-    }
+		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
+				.thenReturn(ResponseEntity.ok(accountResponse));
 
-    @Test
-    void shouldIncrementFailureCounter() throws Exception {
+		service.process(request);
 
-        EventRequest request = request();
+		SimpleMeterRegistry registry = (SimpleMeterRegistry) ReflectionTestUtils.getField(service, "meterRegistry");
 
-        when(repository.findById(anyString()))
-                .thenReturn(Optional.empty());
+		assertEquals(1.0, registry.counter("gateway.events.success").count());
+	}
 
-        when(objectMapper.writeValueAsString(any()))
-                .thenReturn("{}");
+	@Test
+	void shouldIncrementFailureCounter() throws Exception {
 
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(EventResponse.class)))
-                .thenThrow(new RuntimeException());
+		EventRequest request = request();
 
-        try {
-            service.process(request);
-        } catch (Exception ignored) {
-        }
+		when(repository.findById(anyString())).thenReturn(Optional.empty());
 
-        SimpleMeterRegistry registry =
-                (SimpleMeterRegistry) ReflectionTestUtils.getField(
-                        service,
-                        "meterRegistry");
+		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
-        assertEquals(
-                1.0,
-                registry.counter("gateway.events.failed").count());
-    }
-    
-    @Test
-    void shouldPropagateTraceIdToAccountService() throws Exception {
+		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
+				.thenThrow(new RuntimeException());
 
-        EventRequest request = request();
+		try {
+			service.process(request);
+		} catch (Exception ignored) {
+		}
 
-        when(repository.findById(anyString()))
-                .thenReturn(Optional.empty());
+		SimpleMeterRegistry registry = (SimpleMeterRegistry) ReflectionTestUtils.getField(service, "meterRegistry");
 
-        when(objectMapper.writeValueAsString(any()))
-                .thenReturn("{}");
+		assertEquals(1.0, registry.counter("gateway.events.failed").count());
+	}
 
-        EventResponse response = new EventResponse();
-        response.setEventId("EVT-100");
+	@Test
+	void shouldPropagateTraceIdToAccountService() throws Exception {
 
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(EventResponse.class)))
-                .thenReturn(ResponseEntity.ok(response));
+		EventRequest request = request();
 
-        // Micrometer tracing mocks
-        Span span = mock(Span.class);
-        io.micrometer.tracing.TraceContext context =
-                mock(io.micrometer.tracing.TraceContext.class);
+		when(repository.findById(anyString())).thenReturn(Optional.empty());
 
-        when(tracer.currentSpan()).thenReturn(span);
-        when(span.context()).thenReturn(context);
-        when(context.traceId()).thenReturn("trace-12345");
+		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
-        ArgumentCaptor<HttpEntity<EventRequest>> captor =
-                ArgumentCaptor.forClass(HttpEntity.class);
+		EventResponse response = new EventResponse();
+		response.setEventId("EVT-100");
 
-        service.process(request);
+		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
+				.thenReturn(ResponseEntity.ok(response));
 
-        verify(restTemplate).exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                captor.capture(),
-                eq(EventResponse.class));
+		// Micrometer tracing mocks
+		Span span = mock(Span.class);
+		io.micrometer.tracing.TraceContext context = mock(io.micrometer.tracing.TraceContext.class);
 
-        HttpHeaders headers = captor.getValue().getHeaders();
+		when(tracer.currentSpan()).thenReturn(span);
+		when(span.context()).thenReturn(context);
+		when(context.traceId()).thenReturn("trace-12345");
 
-        assertEquals(
-                "trace-12345",
-                headers.getFirst("X-Trace-Id"));
-    }
-    
-    @Test
-    void shouldSendEmptyTraceIdWhenCurrentSpanIsNull() throws Exception {
+		ArgumentCaptor<HttpEntity<EventRequest>> captor = ArgumentCaptor.forClass(HttpEntity.class);
 
-        EventRequest request = request();
+		service.process(request);
 
-        when(repository.findById(anyString()))
-                .thenReturn(Optional.empty());
+		verify(restTemplate).exchange(anyString(), eq(HttpMethod.POST), captor.capture(), eq(EventResponse.class));
 
-        when(objectMapper.writeValueAsString(any()))
-                .thenReturn("{}");
+		HttpHeaders headers = captor.getValue().getHeaders();
 
-        when(tracer.currentSpan()).thenReturn(null);
+		assertEquals("trace-12345", headers.getFirst("X-Trace-Id"));
+	}
 
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(EventResponse.class)))
-                .thenReturn(ResponseEntity.ok(new EventResponse()));
+	@Test
+	void shouldSendEmptyTraceIdWhenCurrentSpanIsNull() throws Exception {
 
-        ArgumentCaptor<HttpEntity<EventRequest>> captor =
-                ArgumentCaptor.forClass(HttpEntity.class);
+		EventRequest request = request();
 
-        service.process(request);
+		when(repository.findById(anyString())).thenReturn(Optional.empty());
 
-        verify(restTemplate).exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                captor.capture(),
-                eq(EventResponse.class));
+		when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
-        assertEquals(
-                "",
-                captor.getValue()
-                        .getHeaders()
-                        .getFirst("X-Trace-Id"));
-    }
+		when(tracer.currentSpan()).thenReturn(null);
+
+		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(EventResponse.class)))
+				.thenReturn(ResponseEntity.ok(new EventResponse()));
+
+		ArgumentCaptor<HttpEntity<EventRequest>> captor = ArgumentCaptor.forClass(HttpEntity.class);
+
+		service.process(request);
+
+		verify(restTemplate).exchange(anyString(), eq(HttpMethod.POST), captor.capture(), eq(EventResponse.class));
+
+		assertEquals("", captor.getValue().getHeaders().getFirst("X-Trace-Id"));
+	}
 }

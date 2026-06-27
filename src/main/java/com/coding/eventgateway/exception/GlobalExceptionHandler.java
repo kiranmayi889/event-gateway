@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 
 import com.coding.eventgateway.dto.ErrorResponse;
@@ -63,6 +64,22 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ErrorResponse> generic(Exception ex) {
+
+		ErrorResponse response = new ErrorResponse();
+
+		response.setTimestamp(Instant.now());
+		response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+		response.setError("Internal Server Error");
+		response.setCode("INTERNAL_ERROR");
+		response.setMessage(ex.getMessage());
+
+		response.setTraceId(getTraceId());
+
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+	}
+	
+	@ExceptionHandler(HttpStatusCodeException.class)
+	public ResponseEntity<ErrorResponse> httpStatusException(HttpStatusCodeException ex) {
 
 		ErrorResponse response = new ErrorResponse();
 

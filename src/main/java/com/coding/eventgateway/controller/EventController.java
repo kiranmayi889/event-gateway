@@ -43,7 +43,8 @@ public class EventController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Event Created"),
             @ApiResponse(responseCode = "400", description = "Invalid Request"),
-            @ApiResponse(responseCode = "503", description = "Account Service Unavailable")
+            @ApiResponse(responseCode = "503", description = "Account Service Unavailable"),
+            @ApiResponse(responseCode = "500", description = "Internal error from Account Service")
     })
     public ResponseEntity<EventResponse> publish(
             @Valid @RequestBody EventRequest request,
